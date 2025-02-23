@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2021-2025 tteck
-# Author: tteck (tteckster)
-# Co-Author: remz1337
-# License: MIT
-# https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# Copyright (c) 2021-2025 community-scripts ORG
+# Author: githubaff0
+# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# Source: https://github.com/cryptpad/cryptpad.git cryptpad
 
 source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
 color
@@ -17,14 +16,58 @@ update_os
 msg_info "Installing Dependencies"
 $STD apt-get install -y curl
 $STD apt-get install -y sudo
-$STD apt-get install -y mc
-$STD apt-get install -y imagemagick
+$STD apt-get install -y git
 msg_ok "Installed Dependencies"
 
-msg_info "Installing Python Dependencies"
-$STD apt-get -y install python3-pip
-rm -rf /usr/lib/python3.*/EXTERNALLY-MANAGED
-msg_ok "Installed Python Dependencies"
+msg_info "Setup Node.js Repository"
+mkdir -p /etc/apt/keyrings
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" >/etc/apt/sources.list.d/nodesource.
+t
+msg_ok "Setup Node.js Repository"
+
+msg_info "Setup Node.js"
+$STD apt-get update
+$STD apt-get install -y nodejs
+#$STD npm install -g yarn
+msg_ok "Setup Node.js"
+
+msg_info "Setup Cryptpad"
+cd /opt
+RELEASE=$(curl -s https://api.github.com/repos/cryptpad/cryptpad/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
+wget -q "https://github.com/cryptpad/cryptpad/archive/refs/tags/${RELEASE}.zip"
+unzip -q "${RELEASE}.zip"
+mv "cryptpad-${RELEASE:1}" /opt/cryptpad
+useradd -r cryptpad -s /sbin/nologin
+chown -R cryptpad: /opt/cryptpad
+cd /opt/cryptpad
+
+msg_info "Setup NPM dependencies"
+npm ci
+npm run install:components
+
+msg_info "Install OnlyOffice"
+./install-onlyoffice.sh
+
+msg_info "Configure Cryptpad"
+sed -e 's|/home/cryptpad/cryptpad|/opt/cryptpad|g' docs/cryptpad.service > /etc/systemd/system/cryptpad.service
+
+cp config/config.example.js config/config.js
+cp /opt/cryptpad/customize.dist/application_config.js /opt/cryptpad/customize/application_config.js
+sed -i -e "/return AppConfig/i\
+AppConfig.loginSalt = '$(openssl rand -base64 20)';'\
+
+" /opt/cryptpad/customize/application_config.js
+
+cat <<EOF | crontab -u cryptpad -
+0 0 * * * /usr/bin/node cryptpad/scripts/evict-inactive.js > /dev/null
+0 0 * * 0 /usr/bin/node cryptpad/scripts/evict-archived.js > /dev/null
+EOF
+
+#node server
+
+
+
 
 msg_info "Installing Kepubify"
 mkdir -p /opt/kepubify
