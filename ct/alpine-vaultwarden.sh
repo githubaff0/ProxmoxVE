@@ -64,5 +64,5 @@ build_container
 description
 
 msg_ok "Completed Successfully!\n"
-echo -e "${APP} should be reachable by going to the following URL.
+echo -e "${APP} needs client to connect via a proxy for HTTPS - proxy should point to the following URL.
          ${BL}http://${IP}:8000${CL} \n"
